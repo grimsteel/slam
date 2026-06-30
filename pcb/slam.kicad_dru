@@ -1,0 +1,5 @@
+(version 1)
+
+(rule "Allow USB pads near edge"
+    (constraint edge_clearance (min 0.0mm))
+    (condition "A.memberOfFootprint('lcsc:USB-C-SMD_SHOU_TYPE-C-16P-CB1.6')"))
