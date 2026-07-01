@@ -795,7 +795,9 @@
       "Peripherals"
     ]
   ],
-  "text_variables": {},
+  "text_variables": {
+    "GIT_HASH": "26b2b70"
+  },
   "tuning_profiles": {
     "meta": {
       "version": 0
