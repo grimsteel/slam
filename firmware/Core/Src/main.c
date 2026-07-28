@@ -1,4 +1,5 @@
 /* USER CODE BEGIN Header */
+#include "SEGGER_RTT.h"
 /**
   ******************************************************************************
   * @file           : main.c
@@ -19,6 +20,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "fatfs.h"
+#include "stm32f4xx_hal_tim.h"
 #include "usb_device.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -102,15 +104,15 @@ int main(void)
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
-
+  SEGGER_RTT_Init();
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_DMA_Init();
   MX_TIM1_Init();
-  MX_TIM2_Init();
-  MX_TIM3_Init();
+  // MX_TIM2_Init();
+  // MX_TIM3_Init();
   MX_USART1_UART_Init();
   MX_I2C1_Init();
   MX_USART6_UART_Init();
@@ -123,13 +125,37 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
-  {
-    /* USER CODE END WHILE */
+  HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
 
-    /* USER CODE BEGIN 3 */
+  // Enable BLE chip (setting LOW stops active connections)
+  HAL_GPIO_WritePin(BLE_EN_GPIO_Port, BLE_EN_Pin, GPIO_PIN_SET);
+
+  SEGGER_RTT_ConfigUpBuffer(0, NULL, NULL, 0, SEGGER_RTT_MODE_NO_BLOCK_SKIP);
+  SEGGER_RTT_WriteString(0, "Hello, world!\n");
+
+  uint8_t buffer[64];
+  uint8_t lds_buffer[4];
+
+  while (1) {
+      if (SEGGER_RTT_HasKey()) {
+        // UART console
+        uint32_t downbytes = SEGGER_RTT_Read(0, buffer, sizeof(buffer));
+        // Send to ble chip
+        if (downbytes > 0) {
+            HAL_UART_Transmit(&huart6, buffer, (uint16_t) downbytes, HAL_MAX_DELAY);
+        }
+      }
+
+      if (HAL_UART_Receive(&huart1, lds_buffer, 4, HAL_MAX_DELAY)) {
+          SEGGER_RTT_printf(0, "%02x %02x %02x %02x\n", lds_buffer[0], lds_buffer[1], lds_buffer[2]);
+      }
+
+      uint8_t rxbyte;
+      // read one byte
+      if (HAL_UART_Receive(&huart6, &rxbyte, 1, 0) == HAL_OK) {
+          SEGGER_RTT_Write(0, &rxbyte, 1);
+      }
   }
-  /* USER CODE END 3 */
 }
 
 /**
