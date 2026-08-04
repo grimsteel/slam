@@ -37,6 +37,11 @@ add_executable(${CMAKE_PROJECT_NAME})
 # Add STM32CubeMX generated sources
 add_subdirectory(cmake/stm32cubemx)
 
+target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE
+  -fstack-usage
+  -Wstack-usage=96
+)
+
 # Link directories setup
 target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined library search paths
@@ -46,6 +51,10 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
     Core/Src/SEGGER_RTT.c
+    Core/Src/SEGGER_RTT_printf.c
+    Core/Src/lds.c
+    Core/Src/pid.c
+    Core/Src/imu.c
 )
 
 # Add include paths

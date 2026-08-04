@@ -20,7 +20,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "fatfs.h"
-#include "stm32f4xx_hal_tim.h"
+#include "lds.h"
 #include "usb_device.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -78,6 +78,7 @@ static void MX_SDIO_SD_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+
 /* USER CODE END 0 */
 
 /**
@@ -120,42 +121,29 @@ int main(void)
   MX_USB_DEVICE_Init();
   MX_FATFS_Init();
   /* USER CODE BEGIN 2 */
-
+  //lds_t lds;
+  //lds_init(&lds, &huart1, &htim1, TIM_CHANNEL_1);
+  uint16_t value = 0;
+  uint32_t last_time = 0;
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
+  while (1)
+  {
+    //uint32_t current = HAL_GetTick();
+    /*lds_update(&lds);
 
-  // Enable BLE chip (setting LOW stops active connections)
-  HAL_GPIO_WritePin(BLE_EN_GPIO_Port, BLE_EN_Pin, GPIO_PIN_SET);
+    if (current - last_time >= 500) {
+      float dt = (current - last_time) / 1000.0f;
+      lds_pid_update(&lds, dt);
+      last_time = current;
+    }*/
+    /* USER CODE END WHILE */
 
-  SEGGER_RTT_ConfigUpBuffer(0, NULL, NULL, 0, SEGGER_RTT_MODE_NO_BLOCK_SKIP);
-  SEGGER_RTT_WriteString(0, "Hello, world!\n");
-
-  uint8_t buffer[64];
-  uint8_t lds_buffer[4];
-
-  while (1) {
-      if (SEGGER_RTT_HasKey()) {
-        // UART console
-        uint32_t downbytes = SEGGER_RTT_Read(0, buffer, sizeof(buffer));
-        // Send to ble chip
-        if (downbytes > 0) {
-            HAL_UART_Transmit(&huart6, buffer, (uint16_t) downbytes, HAL_MAX_DELAY);
-        }
-      }
-
-      if (HAL_UART_Receive(&huart1, lds_buffer, 4, HAL_MAX_DELAY)) {
-          SEGGER_RTT_printf(0, "%02x %02x %02x %02x\n", lds_buffer[0], lds_buffer[1], lds_buffer[2]);
-      }
-
-      uint8_t rxbyte;
-      // read one byte
-      if (HAL_UART_Receive(&huart6, &rxbyte, 1, 0) == HAL_OK) {
-          SEGGER_RTT_Write(0, &rxbyte, 1);
-      }
+    /* USER CODE BEGIN 3 */
   }
+  /* USER CODE END 3 */
 }
 
 /**
@@ -286,9 +274,9 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 47;
+  htim1.Init.Prescaler = 3;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 199;
+  htim1.Init.Period = 999;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
@@ -312,7 +300,7 @@ static void MX_TIM1_Init(void)
     Error_Handler();
   }
   sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 99;
+  sConfigOC.Pulse = 0;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
