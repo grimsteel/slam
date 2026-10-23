@@ -1,5 +1,4 @@
 /* USER CODE BEGIN Header */
-#include "SEGGER_RTT.h"
 /**
   ******************************************************************************
   * @file           : main.c
@@ -20,11 +19,16 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "fatfs.h"
+#include "stm32f4xx_hal_gpio.h"
+#include "stm32f4xx_hal_uart.h"
 #include "usb_device.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "SEGGER_RTT.h"
+#include "lds.h"
+#include "imu.h"
+#include "motor.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -57,7 +61,7 @@ UART_HandleTypeDef huart6;
 DMA_HandleTypeDef hdma_usart1_rx;
 
 /* USER CODE BEGIN PV */
-
+imu_t imu;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -72,13 +76,19 @@ static void MX_I2C1_Init(void);
 static void MX_USART6_UART_Init(void);
 static void MX_SDIO_SD_Init(void);
 /* USER CODE BEGIN PFP */
-
+static void I2C1_ClearBus(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
-
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+  if (GPIO_Pin == IMU_INT_Pin) {
+    imu_dma_start(&imu);
+  }
+}
+void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c) {
+  imu_dma_complete(&imu, hi2c);
+}
 /* USER CODE END 0 */
 
 /**
@@ -106,12 +116,13 @@ int main(void)
 
   /* USER CODE BEGIN SysInit */
   SEGGER_RTT_Init();
+  //I2C1_ClearBus();
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_DMA_Init();
-  MX_TIM1_Init();
+  // MX_TIM1_Init();
   MX_TIM2_Init();
   MX_TIM3_Init();
   MX_USART1_UART_Init();
@@ -123,22 +134,104 @@ int main(void)
   /* USER CODE BEGIN 2 */
   //lds_t lds;
   //lds_init(&lds, &huart1, &htim1, TIM_CHANNEL_1);
-  uint16_t value = 0;
+  uint8_t rx_byte[2] = {0,0};
+  uint16_t time = 0;
+  int16_t comps[4] = {0,0,0,0};
+  SEGGER_RTT_printf(0, "Init IMU: %d\n", imu_init(&imu, &hi2c1));
+  SEGGER_RTT_printf(0, "Log: %d\n", imu_debug_regs(&imu));
+  motor_init();
   uint32_t last_time = 0;
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  int started = 0;
   while (1)
   {
-    //uint32_t current = HAL_GetTick();
-    /*lds_update(&lds);
+    uint32_t current = HAL_GetTick();
+    //lds_update(&lds);
 
-    if (current - last_time >= 500) {
-      float dt = (current - last_time) / 1000.0f;
-      lds_pid_update(&lds, dt);
+    if (started && current - last_time >= time) {
+      started = 0;
+      for (int i = 0; i < 4; i++) {
+        motor_set_duty(i, 0);
+      }
+      SEGGER_RTT_printf(0, "Complete after %d\n", current - last_time);
+      imu_parse_update(&imu);
+      
+    }
+
+    /*if (current - last_time >= 2000) {
+      //float dt = (current - last_time) / 1000.0f;
+      //lds_pid_update(&lds, dt);
       last_time = current;
+      SEGGER_RTT_printf(0, "Set %d\n", a);
+
+      for (int j = 0; j < 4; j++) {
+        if (a % 2 == 0) {
+          motor_set_duty(j, 0);
+        } else if (a == 1) {
+          motor_set_duty(j, 850);
+        } else {
+          if (j % 2 == 0) {
+            motor_set_duty(j, -850);
+          } else {
+            motor_set_duty(j, 850);
+          }
+        }
+      }
+      
+      a++;
+      if (a >= 4) a = 0;
     }*/
+
+    if (SEGGER_RTT_HasData(0)) {
+      uint8_t c = SEGGER_RTT_WaitKey();
+      HAL_UART_Transmit(&huart6, &c, 1, 100);
+    }
+
+    if (HAL_UART_Receive(&huart6, rx_byte, 1, 0) == HAL_OK) {
+      if (HAL_GPIO_ReadPin(BLE_STATE_GPIO_Port, BLE_STATE_Pin) == GPIO_PIN_SET) {
+        SEGGER_RTT_printf(0, "Received %02x\n", rx_byte[0]);
+        if (rx_byte[0] == 0x01) {
+          // set time
+          if (HAL_UART_Receive(&huart6, rx_byte, 2, 100) == HAL_OK) {
+            time = *((const uint16_t*) rx_byte);
+            SEGGER_RTT_printf(0, "Set time to %dms\n", time);
+          }
+        } else if (rx_byte[0] >= 0x02 && rx_byte[0] <= 0x05) {
+          int idx = rx_byte[0] - 0x02;
+          if (HAL_UART_Receive(&huart6, rx_byte, 2, 100) == HAL_OK) {
+            comps[idx] = *((const int16_t*) rx_byte);
+            SEGGER_RTT_printf(0, "Set motor[%d] to %d\n", idx, comps[idx]);
+          }
+        } else if (rx_byte[0] == 0x06) {
+          // start
+          SEGGER_RTT_printf(0, "Start for %dms at [%d %d %d %d]\n", time, comps[0], comps[1], comps[2], comps[3]);
+          started = 1;
+          last_time = current;
+          for (int i = 0; i < 4; i++) {
+            motor_set_rpm(i, comps[i]);
+          }
+        }
+      } else {
+        SEGGER_RTT_Write(0, rx_byte, 1);
+      }
+      /*if (rx_byte == 0xBE) {
+        HAL_StatusTypeDef res = HAL_UART_Receive(&huart6, &rx_byte, 1, 100);
+        if (res == HAL_OK && rx_byte >= 0 && rx_byte < 16) {
+          SEGGER_RTT_printf(0, "Send [%d, %d)\n", rx_byte * 90, (rx_byte + 1) * 90);
+          if (i < 8)
+            HAL_UART_Transmit(&huart6, ((const uint8_t*) lds.dists) + 90 * rx_byte, 90, 1000);
+          else {
+            HAL_UART_Transmit(&huart6, ((const uint8_t*) lds.strengths) + 90 * (rx_byte - 8), 90, 1000);
+          }
+        } else {
+          SEGGER_RTT_printf(0, "Invalid %d %d\n", rx_byte, res);
+        }
+      }*/
+      rx_byte[0] = 0;
+    }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -597,7 +690,7 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pins : DRV1_FAULT_Pin DRV2_FAULT_Pin */
   GPIO_InitStruct.Pin = DRV1_FAULT_Pin|DRV2_FAULT_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pins : BOOT1_Pin BLE_STATE_Pin */
@@ -629,7 +722,32 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void I2C1_ClearBus(void) {
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
 
+  // 1. Configure SCL and SDA as Open-Drain Output
+  GPIO_InitStruct.Pin = GPIO_PIN_8 | GPIO_PIN_9;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  // 2. Pulse SCL 9 times to clear stuck slave
+  for (int i = 0; i < 9; i++) {
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET);
+    HAL_Delay(1);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
+    HAL_Delay(1);
+  }
+
+  // 3. Generate a STOP condition (SDA goes high while SCL is high)
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_RESET);
+  HAL_Delay(1);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
+  HAL_Delay(1);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_SET);
+  HAL_Delay(1);
+}
 /* USER CODE END 4 */
 
 /**

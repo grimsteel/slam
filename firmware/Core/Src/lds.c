@@ -1,4 +1,5 @@
 #include "lds.h"
+#include "util.h"
 
 #define LDS_BYTE(idx) lds->buf[(lds->buf_idx + (idx)) % LDS_BUFFER_SIZE]
 
@@ -9,6 +10,8 @@
 
 
 HAL_StatusTypeDef lds_init(lds_t* lds, UART_HandleTypeDef* uart, TIM_HandleTypeDef* tim, uint32_t tim_channel) {
+  ERROR_DEF;
+  
   lds->uart = uart;
   lds->motor_tim = tim;
   lds->motor_tim_channel = tim_channel;
@@ -21,14 +24,9 @@ HAL_StatusTypeDef lds_init(lds_t* lds, UART_HandleTypeDef* uart, TIM_HandleTypeD
   // https://www.desmos.com/calculator/toskeknabq
   lds->motor_pid.kp = 1.583;
   lds->motor_pid.ki = 1.5;
-
-  HAL_StatusTypeDef res;
   
-  res = HAL_TIM_PWM_Start(tim, tim_channel);
-  if (res != HAL_OK) return res;
-  
-  res = HAL_UART_Receive_DMA(lds->uart, lds->buf, LDS_BUFFER_SIZE);
-  if (res != HAL_OK) return res;
+  CHECK(HAL_TIM_PWM_Start(tim, tim_channel));
+  CHECK(HAL_UART_Receive_DMA(lds->uart, lds->buf, LDS_BUFFER_SIZE));
 
   return HAL_OK;
 }

@@ -55,6 +55,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/lds.c
     Core/Src/pid.c
     Core/Src/imu.c
+    Core/Src/motor.c
 )
 
 # Add include paths
