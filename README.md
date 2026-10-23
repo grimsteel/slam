@@ -10,3 +10,5 @@ Project progress:
 - [x] Landmark detection (LiDAR)
 - [ ] STM EKF filter
 - [ ] STM EKF-SLAM (& landmark storage)
+
+![PCB](assets/slam-pcb.jpg)
